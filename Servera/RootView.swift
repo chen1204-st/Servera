@@ -27,6 +27,8 @@ enum AppTab: String, CaseIterable, Identifiable {
 
 struct RootView: View {
     @Environment(\.modelContext) private var modelContext
+    @AppStorage("servera.theme.id") private var selectedThemeID = ServeraThemePreset.fallback.id
+    @AppStorage("servera.appearance.mode") private var appearanceModeRawValue = ServeraAppearanceMode.system.rawValue
     @Query(sort: [SortDescriptor(\ManagedDeviceRecord.orderIndex), SortDescriptor(\ManagedDeviceRecord.createdAt)])
     private var deviceRecords: [ManagedDeviceRecord]
     @State private var selectedTab: AppTab = .dashboard
@@ -59,6 +61,14 @@ struct RootView: View {
 
     private var serverDevices: [DashboardDevice] {
         visibleDevices.filter { $0.kind == .server }
+    }
+
+    private var currentTheme: ServeraThemePreset {
+        ServeraThemePreset.preset(for: selectedThemeID)
+    }
+
+    private var preferredColorScheme: ColorScheme? {
+        ServeraAppearanceMode.mode(for: appearanceModeRawValue).colorScheme
     }
 
     var body: some View {
@@ -208,6 +218,7 @@ struct RootView: View {
                 }
             }
         }
+        .environment(\.serveraTheme, currentTheme)
         .sheet(item: $editingServer) { selection in
             ServerEditSheet(deviceID: selection.id) { updatedDevice in
                 handleDeviceUpdated(updatedDevice)
@@ -256,7 +267,7 @@ struct RootView: View {
         } message: {
             Text("删除后会移除本机配置和 Keychain 凭据。")
         }
-        .preferredColorScheme(.light)
+        .preferredColorScheme(preferredColorScheme)
     }
 
     private var deleteTitle: String {
@@ -1030,30 +1041,47 @@ struct NASControlPanelRoute: Hashable {
 }
 
 struct ServeraBackground: View {
+    @Environment(\.serveraTheme) private var theme
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
         LinearGradient(
-            colors: [.serveraBackground, .serveraTintSoft, .white],
+            colors: backgroundColors,
             startPoint: .top,
             endPoint: .bottom
         )
         .overlay(alignment: .topLeading) {
             Circle()
-                .fill(Color.serveraTint.opacity(0.42))
+                .fill(theme.tint.opacity(colorScheme == .dark ? 0.22 : 0.42))
                 .frame(width: 260, height: 260)
                 .blur(radius: 52)
                 .offset(x: -90, y: -70)
         }
         .overlay(alignment: .topTrailing) {
             Circle()
-                .fill(Color.serveraLeafSoft.opacity(0.76))
+                .fill((colorScheme == .dark ? theme.sky : theme.leafSoft).opacity(colorScheme == .dark ? 0.16 : 0.76))
                 .frame(width: 220, height: 220)
                 .blur(radius: 54)
                 .offset(x: 80, y: -50)
         }
     }
+
+    private var backgroundColors: [Color] {
+        if colorScheme == .dark {
+            [
+                Color(red: 0.055, green: 0.050, blue: 0.065),
+                theme.accentDeep.opacity(0.24),
+                Color(red: 0.020, green: 0.022, blue: 0.030)
+            ]
+        } else {
+            [theme.background, theme.tintSoft, .white]
+        }
+    }
 }
 
 struct ServeraTabBar: View {
+    @Environment(\.serveraTheme) private var theme
+    @Environment(\.colorScheme) private var colorScheme
     @Binding var selectedTab: AppTab
     let namespace: Namespace.ID
 
@@ -1066,15 +1094,18 @@ struct ServeraTabBar: View {
         .padding(7)
         .background {
             Capsule()
-                .fill(.white.opacity(0.62))
+                .fill(.white.opacity(colorScheme == .dark ? 0.10 : 0.62))
                 .background(.ultraThinMaterial, in: Capsule())
-                .overlay(Capsule().stroke(.white.opacity(0.72), lineWidth: 1))
-                .shadow(color: Color.serveraAccent.opacity(0.24), radius: 28, y: 12)
+                .overlay(Capsule().stroke(.white.opacity(colorScheme == .dark ? 0.16 : 0.72), lineWidth: 1))
+                .shadow(color: theme.accent.opacity(0.24), radius: 28, y: 12)
         }
     }
 }
 
 struct BottomSafeAreaMist: View {
+    @Environment(\.serveraTheme) private var theme
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
         GeometryReader { proxy in
             let height = proxy.safeAreaInsets.bottom + 150
@@ -1085,9 +1116,9 @@ struct BottomSafeAreaMist: View {
                     LinearGradient(
                         stops: [
                             .init(color: .clear, location: 0),
-                            .init(color: Color.serveraTintSoft.opacity(0.62), location: 0.25),
-                            .init(color: Color.white.opacity(0.94), location: 0.64),
-                            .init(color: Color.white.opacity(0.98), location: 1)
+                            .init(color: mistMidColor, location: 0.25),
+                            .init(color: mistBaseColor.opacity(0.94), location: 0.64),
+                            .init(color: mistBaseColor.opacity(0.98), location: 1)
                         ],
                         startPoint: .top,
                         endPoint: .bottom
@@ -1113,9 +1144,18 @@ struct BottomSafeAreaMist: View {
             .ignoresSafeArea(edges: .bottom)
         }
     }
+
+    private var mistMidColor: Color {
+        colorScheme == .dark ? theme.accentDeep.opacity(0.18) : theme.tintSoft.opacity(0.62)
+    }
+
+    private var mistBaseColor: Color {
+        colorScheme == .dark ? Color(red: 0.020, green: 0.022, blue: 0.030) : .white
+    }
 }
 
 struct ServeraTabButton: View {
+    @Environment(\.serveraTheme) private var theme
     let tab: AppTab
     @Binding var selectedTab: AppTab
     let namespace: Namespace.ID
@@ -1136,7 +1176,7 @@ struct ServeraTabButton: View {
                 Text(tab.rawValue)
                     .font(.system(size: 11, weight: .bold))
             }
-            .foregroundStyle(isSelected ? Color.serveraAccentDeep : Color.primary.opacity(0.72))
+            .foregroundStyle(isSelected ? theme.accentDeep : Color.primary.opacity(0.72))
             .frame(maxWidth: .infinity)
             .frame(height: 54)
             .background {
@@ -1150,29 +1190,33 @@ struct ServeraTabButton: View {
 }
 
 struct LiquidGlassCapsule: View {
+    @Environment(\.serveraTheme) private var theme
+    @Environment(\.colorScheme) private var colorScheme
     let namespace: Namespace.ID
 
     var body: some View {
         Capsule()
             .fill(
                 LinearGradient(
-                    colors: [.white.opacity(0.92), .serveraTintSoft.opacity(0.82)],
+                    colors: [.white.opacity(colorScheme == .dark ? 0.18 : 0.92), theme.tintSoft.opacity(colorScheme == .dark ? 0.18 : 0.82)],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
             )
-            .overlay(Capsule().stroke(.white.opacity(0.86), lineWidth: 1))
-            .shadow(color: Color.serveraAccent.opacity(0.22), radius: 16, y: 8)
+            .overlay(Capsule().stroke(.white.opacity(colorScheme == .dark ? 0.22 : 0.86), lineWidth: 1))
+            .shadow(color: theme.accent.opacity(0.22), radius: 16, y: 8)
             .matchedGeometryEffect(id: "selected-tab-glass", in: namespace)
             .modifier(LiquidGlassIfAvailable())
     }
 }
 
 struct LiquidGlassIfAvailable: ViewModifier {
+    @Environment(\.serveraTheme) private var theme
+
     func body(content: Content) -> some View {
         if #available(iOS 26.0, *) {
             content
-                .glassEffect(.regular.tint(Color.serveraTint.opacity(0.24)).interactive(), in: .capsule)
+                .glassEffect(.regular.tint(theme.tint.opacity(0.24)).interactive(), in: .capsule)
         } else {
             content
         }

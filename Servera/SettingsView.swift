@@ -8,6 +8,7 @@ import UniformTypeIdentifiers
 
 struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
+    @AppStorage("servera.theme.id") private var selectedThemeID = ServeraThemePreset.fallback.id
     @Query(sort: [SortDescriptor(\ManagedDeviceRecord.orderIndex), SortDescriptor(\ManagedDeviceRecord.createdAt)])
     private var deviceRecords: [ManagedDeviceRecord]
     @State private var activeSheet: SettingsSheet?
@@ -33,7 +34,7 @@ struct SettingsView: View {
                                 .overlay(Image(systemName: "sparkle").font(.title2.weight(.heavy)).foregroundStyle(.white))
                             Text("获取 Pro")
                                 .font(.system(size: 26, weight: .black))
-                            Text("解锁服务器 Docker 操作、数据同步、文件编辑和高级主题。")
+                            Text("解锁服务器 Docker 操作、数据同步和文件编辑。")
                                 .font(.system(size: 15, weight: .medium))
                                 .foregroundStyle(Color.serveraTextSecondary)
                                 .multilineTextAlignment(.center)
@@ -86,7 +87,7 @@ struct SettingsView: View {
                         Button {
                             activeSheet = .theme
                         } label: {
-                            SettingsRow(icon: "circle.lefthalf.filled", title: "柔光主题", value: "默认")
+                            SettingsRow(icon: "circle.lefthalf.filled", title: "设置主题", value: currentTheme.name)
                         }
                         .buttonStyle(.plain)
                         SettingsRow(icon: "faceid", title: "Face ID 安全验证", value: "已开启")
@@ -141,6 +142,10 @@ struct SettingsView: View {
         } message: {
             Text(resultMessage ?? "")
         }
+    }
+
+    private var currentTheme: ServeraThemePreset {
+        ServeraThemePreset.preset(for: selectedThemeID)
     }
 
     private func prepareBackupExport(password: String) {
@@ -243,14 +248,13 @@ struct SettingsActionRow: View {
 }
 
 struct ThemeSheet: View {
-    @State private var selectedAccent = Color.serveraAccentDeep
-    @State private var selectedIcon = "Default"
+    @AppStorage("servera.theme.id") private var selectedThemeID = ServeraThemePreset.fallback.id
+    @AppStorage("servera.appearance.mode") private var appearanceModeRawValue = ServeraAppearanceMode.system.rawValue
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 14), count: 2)
 
-    private let accents: [Color] = [
-        .serveraAccentDeep, .serveraAccent, .serveraSky, .serveraLeaf,
-        .serveraAmber, .purple, .cyan, .red
-    ]
-    private let icons = ["Default", "Pink Glass", "Blue Shell", "Classic"]
+    private var selectedAppearanceMode: ServeraAppearanceMode {
+        ServeraAppearanceMode.mode(for: appearanceModeRawValue)
+    }
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -261,79 +265,165 @@ struct ThemeSheet: View {
                     .frame(maxWidth: .infinity)
                     .padding(.top, 8)
 
-                Text("主题外观")
+                Text("设置主题")
                     .font(.system(size: 32, weight: .black))
 
-                ServeraCard(cornerRadius: 30) {
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text("主题色")
-                            .font(.system(size: 18, weight: .heavy))
-                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 14), count: 4), spacing: 14) {
-                            ForEach(accents.indices, id: \.self) { index in
-                                Button {
-                                    selectedAccent = accents[index]
-                                } label: {
-                                    Circle()
-                                        .fill(accents[index])
-                                        .frame(width: 48, height: 48)
-                                        .overlay {
-                                            Circle()
-                                                .stroke(.white, lineWidth: 4)
-                                                .opacity(selectedAccent == accents[index] ? 1 : 0)
-                                        }
-                                        .shadow(color: accents[index].opacity(0.28), radius: 12, y: 8)
+                Text("选择一套柔和混色主调，背景、底部导航和玻璃卡片会立即跟随变化。")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Color.serveraTextSecondary)
+                    .lineSpacing(3)
+
+                ServeraCard(cornerRadius: 28) {
+                    VStack(alignment: .leading, spacing: 14) {
+                        Text("外观模式")
+                            .font(.system(size: 18, weight: .black))
+
+                        HStack(spacing: 10) {
+                            ForEach(ServeraAppearanceMode.allCases) { mode in
+                                ThemeAppearanceButton(
+                                    mode: mode,
+                                    isSelected: selectedAppearanceMode == mode
+                                ) {
+                                    withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+                                        appearanceModeRawValue = mode.rawValue
+                                    }
                                 }
-                                .buttonStyle(.plain)
                             }
                         }
                     }
                 }
 
-                ServeraCard(cornerRadius: 30) {
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text("应用图标")
-                            .font(.system(size: 18, weight: .heavy))
-                        ForEach(icons, id: \.self) { icon in
-                            Button {
-                                selectedIcon = icon
-                            } label: {
-                                HStack(spacing: 14) {
-                                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                        .fill(iconGradient(icon))
-                                        .frame(width: 54, height: 54)
-                                        .overlay(Image(systemName: "sparkles").foregroundStyle(.white).fontWeight(.heavy))
-                                    Text(icon)
-                                        .font(.system(size: 17, weight: .bold))
-                                    Spacer()
-                                    if selectedIcon == icon {
-                                        Image(systemName: "checkmark")
-                                            .font(.headline.weight(.heavy))
-                                            .foregroundStyle(Color.serveraAccentDeep)
-                                    }
-                                }
-                                .contentShape(Rectangle())
+                LazyVGrid(columns: columns, spacing: 14) {
+                    ForEach(ServeraThemePreset.presets) { preset in
+                        ThemePresetCard(
+                            preset: preset,
+                            isSelected: selectedThemeID == preset.id
+                        ) {
+                            withAnimation(.spring(response: 0.36, dampingFraction: 0.86)) {
+                                selectedThemeID = preset.id
                             }
-                            .buttonStyle(.plain)
                         }
                     }
                 }
             }
             .padding(22)
         }
+        .environment(\.serveraTheme, ServeraThemePreset.preset(for: selectedThemeID))
         .background(ServeraBackground().ignoresSafeArea())
     }
+}
 
-    private func iconGradient(_ icon: String) -> LinearGradient {
-        switch icon {
-        case "Pink Glass":
-            LinearGradient(colors: [.serveraTint, .serveraAccentDeep], startPoint: .topLeading, endPoint: .bottomTrailing)
-        case "Blue Shell":
-            LinearGradient(colors: [.serveraSky, .blue], startPoint: .topLeading, endPoint: .bottomTrailing)
-        case "Classic":
-            LinearGradient(colors: [.black.opacity(0.82), .gray], startPoint: .topLeading, endPoint: .bottomTrailing)
-        default:
-            LinearGradient(colors: [.black.opacity(0.82), .serveraAccentDeep], startPoint: .topLeading, endPoint: .bottomTrailing)
+struct ThemeAppearanceButton: View {
+    @Environment(\.serveraTheme) private var theme
+    let mode: ServeraAppearanceMode
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 7) {
+                Image(systemName: mode.icon)
+                    .font(.system(size: 15, weight: .heavy))
+                Text(mode.title)
+                    .font(.system(size: 13, weight: .black))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
+            }
+            .foregroundStyle(isSelected ? .white : theme.accentDeep)
+            .frame(maxWidth: .infinity)
+            .frame(height: 58)
+            .background {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(isSelected ? theme.accentDeep : theme.tintSoft.opacity(0.58))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .stroke(isSelected ? Color.white.opacity(0.74) : theme.border.opacity(0.64), lineWidth: 1)
+                    )
+            }
         }
+        .buttonStyle(.plain)
+    }
+}
+
+struct ThemePresetCard: View {
+    let preset: ServeraThemePreset
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 14) {
+                ZStack(alignment: .bottomTrailing) {
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [preset.background, preset.tintSoft, .white],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(height: 104)
+                        .overlay(alignment: .topLeading) {
+                            Circle()
+                                .fill(preset.tint.opacity(0.56))
+                                .frame(width: 74, height: 74)
+                                .blur(radius: 8)
+                                .offset(x: -18, y: -14)
+                        }
+                        .overlay(alignment: .bottomTrailing) {
+                            Circle()
+                                .fill(preset.leafSoft.opacity(0.92))
+                                .frame(width: 72, height: 72)
+                                .blur(radius: 10)
+                                .offset(x: 16, y: 12)
+                        }
+                        .overlay(alignment: .center) {
+                            Circle()
+                                .fill(.white.opacity(0.72))
+                                .frame(width: 54, height: 54)
+                                .overlay(
+                                    Image(systemName: preset.icon)
+                                        .font(.system(size: 18, weight: .heavy))
+                                        .foregroundStyle(preset.accentDeep)
+                                )
+                                .shadow(color: preset.accent.opacity(0.20), radius: 14, y: 8)
+                        }
+
+                    if isSelected {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 24, weight: .heavy))
+                            .foregroundStyle(preset.accentDeep)
+                            .background(.white, in: Circle())
+                            .padding(10)
+                    }
+                }
+
+                HStack(spacing: 8) {
+                    Text(preset.name)
+                        .font(.system(size: 16, weight: .black))
+                        .foregroundStyle(Color.primary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.82)
+                    Spacer(minLength: 4)
+                    Circle().fill(preset.accentDeep).frame(width: 10, height: 10)
+                    Circle().fill(preset.sky).frame(width: 10, height: 10)
+                    Circle().fill(preset.amber).frame(width: 10, height: 10)
+                }
+            }
+            .padding(12)
+            .background {
+                RoundedRectangle(cornerRadius: 28, style: .continuous)
+                    .fill(.white.opacity(isSelected ? 0.86 : 0.66))
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 28, style: .continuous)
+                            .stroke(isSelected ? preset.accentDeep.opacity(0.36) : preset.border.opacity(0.62), lineWidth: isSelected ? 1.4 : 1)
+                    )
+                    .shadow(color: preset.accent.opacity(isSelected ? 0.20 : 0.10), radius: isSelected ? 22 : 14, y: isSelected ? 12 : 8)
+            }
+            .contentShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        }
+        .buttonStyle(.plain)
     }
 }
 
