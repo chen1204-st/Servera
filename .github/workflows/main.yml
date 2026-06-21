@@ -5,16 +5,12 @@ on:
 
 jobs:
   build:
-    # 升级到 macOS 15，确保有最新的 Xcode 和 Swift 环境
-    runs-on: macos-15 
+    # 切换到最新的 macos-26 环境，自带最新的 Xcode 和 Swift 6.2+
+    runs-on: macos-26 
 
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
-
-    # 显式切换到支持 Swift 6.2+ 的最新 Xcode 版本
-    - name: Set up Xcode version
-      run: sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer
 
     - name: Build Archive
       run: |
