@@ -1,0 +1,40 @@
+name: Build IPA
+
+on:
+  workflow_dispatch: # 允许手动触发打包
+
+jobs:
+  build:
+    # 升级到 macOS 15，确保有最新的 Xcode 和 Swift 环境
+    runs-on: macos-15 
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    # 显式切换到支持 Swift 6.2+ 的最新 Xcode 版本
+    - name: Set up Xcode version
+      run: sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer
+
+    - name: Build Archive
+      run: |
+        xcodebuild archive \
+          -project Servera.xcodeproj \
+          -scheme Servera \
+          -archivePath $GITHUB_WORKSPACE/build/Servera.xcarchive \
+          -sdk iphoneos \
+          CODE_SIGNING_ALLOWED=NO \
+          CODE_SIGNING_REQUIRED=NO
+
+    - name: Export IPA (Unsigned)
+      run: |
+        mkdir -p $GITHUB_WORKSPACE/build/Payload
+        cp -r $GITHUB_WORKSPACE/build/Servera.xcarchive/Products/Applications/Servera.app $GITHUB_WORKSPACE/build/Payload/
+        cd $GITHUB_WORKSPACE/build
+        zip -r Servera.ipa Payload
+
+    - name: Upload IPA Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Servera-Unsigned-IPA
+        path: build/Servera.ipa
